@@ -1,0 +1,2 @@
+- Specify uucp group id in Dockerfile.
+- Specify Arduino Version.

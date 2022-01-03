@@ -1,0 +1,3 @@
+- Specify Android Studio Version.
+- Specify Flutter Version.
+- Specify USB device in path section of application.json. ie, /dev/bus/usb
