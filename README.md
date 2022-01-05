@@ -1,52 +1,41 @@
 # xsprash
 A Rootless, Seamless, Stateless Development Environment.
 
-# Build a local environment
+[Japanese README](README_ja.md) is also available.
 
-Install docker rootless, following the instructions below.
+## Supported System
+xsprash runs on Linux.
 
-https://docs.docker.jp/engine/security/rootless.html
+## Features
+Enables GUI applications to run on Linux containers.
+Supports screen display, audio output, and input methods.
 
-For bash, add the following to `~/.bash_profile`
+### Rootless
+All containers run in rootless mode, which means they never need root privileges after they are built.
+Each container's home directory is bound to a single location on the host, keeping the host environment clean and uncluttered.
 
-```bash:~/.bash_profile
-export PATH=$HOME/bin:$PATH
-export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
-```
+### Seamless
+Simply connect via ssh and launch the app to see the app running on another PC or server locally.
+Easily run high-integrity processes on your laptop.
 
-For fish
-```bash:bash
-$ set -U fish_user_paths ~/bin $fish_user_paths
-$ set -Ux DOCKER_HOST unix://$XDG_RUNTIME_DIR/docker.sock
-```
+### Stateless
+All but the bound home directory is destroyed when the app exits, making the environment highly repeatable.
+It is very easy to move to another PC.
 
-Please log out and log back in.
 
-Check if docker rootless works.
-```bash:bash
-$ docker ps
-CONTAINER ID  IMAGE  COMMAND  CREATED  STATUS  PORTS  NAMES
-```
+## Installation
+### Docker Rootless
+Install docker rootless according to [Run the Docker daemon as a non-root user](https://docs.docker.com/engine/security/rootless/)
 
-The next step is to install x11docker.
-First, install the recommended packages for each distribution.
+### x11docker
+Install dependancies for x11docker according to [recommended-base](https://github.com/mviereck/x11docker/wiki/Dependencies#recommended-base)
 
-https://github.com/mviereck/x11docker/wiki/Dependencies#recommended-base
-
-If you have Arch Linux, you can use
-
-```bash:bash
-sudo pacman -S xpra xorg-server-xephyr xorg-xinit xorg-xauth xclip xorg-xhost xorg-xrandr xorg-xdpyinfo nxagent glu
-```
-I also installed `glu` for GPU support of xpra.
-
-After the dependencies are installed, install x11docker itself.
-
+Install x11docker itself
 ```bash:bash
 curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker | sudo bash -s -- --update
 ```
 
-## System Settings
+### System Settings
 Change the configuration so that X Server can be started from X11docker.
 
 ```bash:bash
@@ -54,7 +43,7 @@ echo "allowed_users=anybody" | sudo tee -a /etc/X11/Xwrapper.config
 ```
 
 Change the configuration so that you can connect to DBUS from within the container.
-Create a `/usr/share/dbus-1/session.d/session-local.conf`
+Create `/usr/share/dbus-1/session.d/session-local.conf`
 
 ```config:/usr/share/dbus-1/session.d/session-local.conf
 <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
@@ -65,33 +54,28 @@ Create a `/usr/share/dbus-1/session.d/session-local.conf`
 </busconfig>
 ```
 
-Build xpra image and vscode image.
+### image build
+
+Build a vscode image
 
 ```bash:bash
-$ git clone https://github.com/ysuito/xsprash.git
-$ docker build -t ubuntubase xsprash/src/ubuntubase_ja/
-$ docker build -t xpra xsprash/src/xpra/
-$ docker build -t vscode xsprash/src/vscode/
+git clone https://github.com/ysuito/xsprash.git
+cd xsprash
+docker build -t ubuntubase src/ubuntubase/
+docker build -t vscode src/vscode/
 ```
+For Japanese environment, change `ubuntubase` to `ubuntubase_ja`.
+There are definitions of other applications under `src/`, but only the one above is built for the sake of sample.
 
-There are definitions of other applications under `src/`, but we have only built the one above as a sample.
-
-```bash:bash
-$ docker images
-REPOSITORY                                           TAG               IMAGE ID       CREATED        SIZE
-vscode                                               latest            5419f3b23f23   41 hours ago   1.6GB
-xpra                                                 latest            dcede0d68d1e   41 hours ago   1.49GB
-ubuntu                                               latest            ba6acccedd29   2 months ago   72.8MB
-```
+### Application definition
 
 Define the application to configure the resources to be used by the application.
-
 ```bash:bash
 $ python xsprash.py create
 App Name(String):vscode
 Image(String):vscode
-Command(String):code --verbose --no-sandbox --user-data-dir=/root/.config/Code
-Audio(y/N):n
+Command(String):code --verbose
+Audio(y/N):y
 Input Method(y/N):y
 Volume(y/N):y
 Share Docker Socket(y/N):y
@@ -102,7 +86,6 @@ Docker Options(String):
 ```
 
 If you want to register it as a gnome desktop app, put your favorite icon file in `icon/` and execute the following.
-
 ```bash:bash
 $ python xsprash.py desktop-entry vscode
 Icon File:vscode.svg
@@ -112,43 +95,30 @@ Now, you can use it as a gnome desktop application.
 If you want to start it from the command line, run the following.
 ```bash:bash
 $ python xsprash.py aliases
-alias vscode='python $HOME/xsprash/xsprash.py start vscode'
+alias vscode='python /home/$USER/xsprash/xsprash.py start vscode'
 ```
 
 The alias setting will be output, so add it to the alias configuration file of your shell.
 
-This will start the vscode running on the container.
+Now you can start vscode running on the container.
 
 ```bash:bash
-$ vscode
+vscode
 ```
 
 If you are developing with vscode Remote Container, add the following settings to `devcontainer.json`.
 
 ```json:devcontainer.json
-	"remoteUser": "root",
+	"remoteUser": "vscode",
 	"workspaceMount": "source=${localEnv:BIND_PATH}/${localWorkspaceFolderBasename},target=/workspace,type=bind,consistency=cached",
 	"workspaceFolder": "/workspace"
 ```
 
-Now you can start vscode on the local side.
+## Run the app remotely
+You can run the application on a remote PC by simply adding a setting to ssh config.
+First, perform the above installation on the remote PC as well.
 
-# Build the remote server
-
-Perform the same steps as for building the local environment.
-
-In addition, add the following contents to `~/.profile`.
-```bash:~/.profile
-export PATH=$HOME/bin:$PATH
-export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
-```
-
-This completes the building of the remote server.
-If the remote server is a PC with a screen and keyboard, you can launch the application locally by executing `vscode`.
-
-# SSH configuration
-
-Replace the IP_ADDRESS, USERNAME, KEY, and SHELL parts with your environment.
+Replace IP_ADDRESS, USERNAME, KEY, and SHELL with your environment.
 
 ```config:~/.ssh/config
 Host dev-server
@@ -157,37 +127,37 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  source ~/.profile; python ~/xsprash/xsprash.py server & SHELL
+RemoteCommand  python ~/xsprash/xsprash.py server & SHELL
 PermitLocalCommand yes
 LocalCommand   python ~/xsprash/xsprash.py client &
-LocalForward   10000 127.0.0.1:10000
+LocalForward   10001 127.0.0.1:10001
 ```
 
-## Point
-
-- RemoteCommand starts xpra server remotely and launch a shell
+### Points
+- RemoteCommand remotely starts xpra server and waits for it in a shell
 - LocalCommand starts the xpra client locally.
 
 Now let's connect to the server from the client.
-
 ```
 ssh dev-server
 ```
 
-When prompted by the server
-
-```
+When the server prompts you,
+````
 vscode
-```
+````
+This will run vscode remotely.
+
 When you log out from the remote, you can exit by typing `exit` once in normal ssh, but you need to do `Ctrl+c` again because LocalCommand is still active.
 
-Now you can use vscode running on remote machine in local pc.
+Now you can use vscode running on remote locally.
 In this state, the local and remote directories are not shared.
 In the following sections, we will explain how to share the persistent data area between local and remote.
 
-# Configure file synchronization with Syncthing
 
-We will use the official syncthing Docker Image and modify the ssh config settings.
+## Configure file synchronization
+We will use Syncthing's Docker image for file synchronization.
+Please change the ssh config setting to the following.
 
 ```config:~/.ssh/config
 Host dev-server
@@ -196,127 +166,43 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  source ~/.profile; python ~/xsprash/xsprash.py server & docker run -p 8384:8384 -p 22000:22000/tcp -p 22000:22000/udp -v ~/xsprash/volume:/var/syncthing --hostname=dev-server -e PUID=0 -e PGID=0 syncthing/syncthing  > ~/xsprash/log/syncthing.log 2>&1 & SHELL
+RemoteCommand  python ~/xsprash/xsprash.py server & python ~/xsprash/xsprash.py sync & SHELL
 PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client & docker run --rm -p 8384:8384/tcp -p 22000:22000/tcp -p 22000:22000/udp -v ~/xsprash/volume:/var/syncthing --hostname=local-pc -e PUID=0 -e PGID=0 docker.io/syncthing/syncthing  > ~/xsprash/log/syncthing.log 2>&1 &
-LocalForward   10000 127.0.0.1:10000
+LocalCommand   python ~/xsprash/xsprash.py client & python ~/xsprash/xsprash.py sync &
+LocalForward   10001 127.0.0.1:10001
 LocalForward   18384 127.0.0.1:8384
 ```
 
-If you access the following address with a browser, you can set up synchronization.
-See the Syncthing documentation for details.
+You can access the following address in your browser to set up synchronization.
+See [Syncthing documentation](https://docs.syncthing.net/) for details.
 
-https://docs.syncthing.net/
+Local Syncthing: `http://127.0.0.1:8384`
 
-Local Syncthing： `http://127.0.0.1:8384`
+Remote Syncthing: `http://127.0.0.1:18384`
 
-Remote Syncthing： `http://127.0.0.1:18384`
+Add the directory you want to share under `xsprash/volume/` and set up the sharing.
 
-## Syncthing Configuration Simplified Flow
 
-- Add devices to each other
-- Add the directory you want to share under `~/xsprash/volume/` and set up sharing.
+## Server-side firewall settings
 
-If you enable UPnP on the NAT router on the route, you will get a direct connection and the network will be faster.
-Even if UPnP is disabled, you can still share files via the Relay server.
+### When using Syncthing
 
-# Configure file synchronization using SSHFS
+#### Inbound
 
-If the UIDs of the local side and the remote side do not match, the permissions will be misaligned and you will not be able to use this method.
-
-## Local side
-
-Run sshd on the client side and add authorized_keys for the user
-If you are concerned about security, you can use
-
-```config:/etc/ssh/sshd_config
-ListenAddress 127.0.0.1
-ListenAddress ::1
-```
-
-to limit the IPs that can be ssh-logged into to local IPs.
-
-Carry the client's private key to the server and execute the following.
-
-## Server side
-
-Install SSHFS.
-
-```
-sudo apt install sshfs
-```
-
-Add the following to `~/.ssh/config`; change the LOCALPC, USER, and LOCALPCKEY parts accordingly.
-
-```config:~/.ssh/config
-Host           LOCALPC
-HostName       127.0.0.1
-Port           2222
-User           USER
-IdentityFile   ~/.ssh/LOCALPCKEY
-```
-
-If this is the first time you have created a config file, run the following.
-
-```
-chmod 600 ~/.ssh/config
-```
-
-Once you have connected to the client, add the fingerprint to known_hosts.
-
-```
-ssh LOCALPC
-```
-
-## Client side
-
-Modify ssh config
-
-```config:~/.ssh/config
-Host dev-server
-HostName       IP_ADDRESS
-Port           22
-User           USERNAME
-IdentityFile   ~/.ssh/KEY
-RequestTTY     force
-RemoteCommand  source ~/.profile; python ~/xsprash/xsprash.py server & sshfs LOCALPC:xsprash/volume ~/xsprash/volume > ~/xsprash/log/sshfs.log 2>&1 &  SHELL
-PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client &
-RemoteForward  2222 127.0.0.1:22
-LocalForward   10000 127.0.0.1:10000
-```
-
-# File synchronization pattern
-
-- No synchronization (local and remote are separate)
-- SSHFS to mount local directory to remote (no time lag, low throughput)
-- Syncthing to synchronize local and remote directories (with time lag, high throughput)
-
-# server-side firewall settings
-
-## When using Syncthing
-
-## Inbound
-
-- From: Local side global IP To: Server IP Port: 22000/udp
+- From:Local side Global IP To:Server IP Port:22000/udp
 - From:Local side Global IP To:Server IP Port:22000/tcp
 - From:Local side Global IP To:Server IP Port:22/tcp
 
-### Outbound
+#### Outbound
 
-- From:Server IP To:Any Port:Any
+- From: Server IP To: Any Port: Any
 
-### SSHFS, without file synchronization.
+### No file synchronization
 
-### Inbound
+#### Inbound
 
 - From:Local side Global IP To:Server IP Port:22/tcp
 
-### Outbound
+#### Outbound
 
 - From:Server IP To:Any Port:Any
-
-### How to switch the environment
-
-- If you start the application at the ssh prompt, you will be in the remote environment.
-- If you start the application in a local terminal, you will be in the local environment.

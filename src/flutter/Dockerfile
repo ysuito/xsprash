@@ -16,7 +16,7 @@ RUN apt update && apt install -y \
     && ln -s /opt/android-studio/bin/studio.sh /usr/local/bin/android_studio \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-RUN chown root:root -R /opt/flutter/
+RUN chmod 777 -R /opt/flutter/
 ENV PATH /opt/flutter/bin:$PATH
 ENV CHROME_EXECUTABLE /usr/bin/google-chrome
 CMD ["code", "--verbose", "--no-sandbox", "--user-data-dir=/root/.config/Code"]

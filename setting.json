@@ -1,0 +1,4 @@
+{
+  "docker_executable": "$HOME/bin/docker",
+  "docker_sock": "$XDG_RUNTIME_DIR/docker.sock"
+}

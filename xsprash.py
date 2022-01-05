@@ -5,10 +5,9 @@
 * This program provides management functions for GUI applications running on containers.
 
 Todo:
-    * remote_start can't get Dockerfile CMD Values
-    * run app as non root user in Docker rootless
-    * run chrome without --no-sandbox option
     * launch each X Server per app
+    * tighten auth
+    * attach
 """
 
 import argparse
@@ -16,61 +15,91 @@ from pathlib import Path
 import subprocess
 import os
 import json
+import time
 
 parser = argparse.ArgumentParser(
     description='A program to manage GUI applications running inside containers.')
-parser.add_argument('command', choices=[
-                    'create', 'start', 'client', 'server', 'list', 'aliases', 'desktop-entry'
-                    ], help='command')
-parser.add_argument('app_name', help='app name', nargs='?')
+parser.add_argument('command',
+                    choices=[
+                        'create', 'start', 'client', 'server',
+                        'sync', 'list', 'aliases', 'desktop-entry',
+                        'chown', 'build', 'build-all'
+                    ],
+                    help='command')
+parser.add_argument('target', help='command target', nargs='?')
 
 args = parser.parse_args()
 
-home = os.environ['HOME']
-xsprashhome = os.path.abspath(os.path.dirname(__file__))
-src_path = os.path.join(xsprashhome, 'src/')
-log_path = os.path.join(xsprashhome, 'log/')
-vol_path = os.path.join(xsprashhome, 'volume/')
-icon_path = os.path.join(xsprashhome, 'icon/')
-desktopfile_dir = os.path.join(home, '.local/share/applications/')
+HOME = os.environ['HOME']
+XSPRASHHOME = os.path.abspath(os.path.dirname(__file__))
+SRC_PATH = os.path.join(XSPRASHHOME, 'src/')
+LOG_PATH = os.path.join(XSPRASHHOME, 'log/')
+VOL_PATH = os.path.join(XSPRASHHOME, 'volume/')
+ICON_PATH = os.path.join(XSPRASHHOME, 'icon/')
+DESKTOPFILE_DIR = os.path.join(HOME, '.local/share/applications/')
 
-uid = os.getuid()
-env = os.environ.copy()
+UID = os.getuid()
+ENV = os.environ.copy()
 
-setting_file_path = os.path.join(xsprashhome, 'setting.json')
+DOCKER_EXECUTABLE = os.path.expandvars('$HOME/bin/docker')
+os.environ['DOCKER_SOCK'] = os.path.expandvars('$XDG_RUNTIME_DIR/docker.sock')
+
+design_file_path = os.path.join(XSPRASHHOME, 'design.json')
 
 
-def read_definition():
-    """read app definition
+def init():
+    """initialize
 
-    read app definition
+    initialize
 
     Args:
         None
 
     Returns:
-        Dictionary: apps definition
+        None
 
     """
+
+    global DOCKER_EXECUTABLE
+
+    setting_file_path = os.path.join(XSPRASHHOME, 'setting.json')
     with open(setting_file_path, 'r', encoding='utf-8') as setting_file:
         setting = json.load(setting_file)
-        return setting
+        DOCKER_EXECUTABLE = os.path.expandvars(setting['docker_executable'])
+        os.environ['DOCKER_SOCK'] = os.path.expandvars(setting['docker_sock'])
 
 
-def save_definition(setting):
-    """save app definition
+def read_design():
+    """read app design
 
-    save app definition
+    read app design
 
     Args:
-        setting (Dictionary): apps definition to save
+        None
+
+    Returns:
+        Dictionary: apps design
+
+    """
+    with open(design_file_path, 'r', encoding='utf-8') as design_file:
+        design = json.load(design_file)
+        return design
+
+
+def save_design(design):
+    """save app design
+
+    save app design
+
+    Args:
+        design (Dictionary): apps design to save
 
     Returns:
         None
 
     """
-    with open(setting_file_path, 'w', encoding='utf-8') as setting_file:
-        json.dump(setting, setting_file)
+    with open(design_file_path, 'w', encoding='utf-8') as design_file:
+        json.dump(design, design_file)
 
 
 def exec_with_logging(app_name, command, side):
@@ -87,16 +116,16 @@ def exec_with_logging(app_name, command, side):
         None
 
     """
-    logfile_path = os.path.join(log_path, app_name + f'_{side}.log')
+    logfile_path = os.path.join(LOG_PATH, app_name + f'_{side}.log')
     with open(logfile_path, 'w', encoding='utf-8') as logfile:
         subprocess.Popen(
-            command, env=env, universal_newlines=True, stdout=logfile, stderr=logfile)
+            command, env=ENV, universal_newlines=True, stdout=subprocess.DEVNULL, stderr=logfile)
 
 
 def create():
-    """create app definition
+    """create app design
 
-    create app definition with dialog, then save to setting.json
+    create app design with dialog, then save to design.json
 
     Args:
         None
@@ -116,12 +145,13 @@ def create():
     tmpfs = bool(input('Share tmpfs /dev/shm(y/N):') == 'y')
     gpu = bool(input('Share gpu /dev/dri(y/N):') == 'y')
     kvm = bool(input('Share kvm /dev/kvm(y/N):') == 'y')
+    privileged = bool(input('Privileged(y/N):') == 'y')
     options = input('Docker Options(String):')
     if len(options) > 0:
         options = options.split(" ")
     else:
         options = []
-    app_setting = {
+    app_design = {
         "app_name": app_name,
         "image": image,
         "command": command,
@@ -132,129 +162,117 @@ def create():
         "tmpfs": tmpfs,
         "gpu": gpu,
         "kvm": kvm,
+        "privileged": privileged,
         "options": options
     }
-    setting = read_definition()
-    setting[app_name] = app_setting
-    save_definition(setting)
+    design = read_design()
+    design[app_name] = app_design
+    save_design(design)
 
 
-def docker_options(app_setting):
-    """generate docker options
+def docker_command_constructor(app_design, display):
+    """generate docker command
 
-    generate docker options from app setting
+    generate docker command from app design
 
     Args:
-        app_setting (Dictionary): app setting to generate options
+        app_design (Dictionary): app design to generate options
+        display (int): xpra display number
 
     Returns:
         None
 
     """
 
-    options = []
-
-    options.extend(["--rm", "-t", "--net=bridge", "--shm-size=4096m"])
-
-    if app_setting.get("audio"):
-        options.extend([
-            "--env", f"PULSE_COOKIE=/run/user/{uid}/pulse/cookie",
-            "--env", f"PULSE_SERVER=unix:/run/user/{uid}/pulse/native",
-            f"--volume=/run/user/{uid}/pulse/native:/run/user/{uid}/pulse/native",
-            f"--volume={env['HOME']}/.config/pulse/cookie:/run/user/{uid}/pulse/cookie:ro"
-        ])
-    if app_setting.get("input_method"):
-        options.extend([
-            "--env", f"GTK_IM_MODULE={env['GTK_IM_MODULE']}",
-            "--env", f"XMODIFIERS={env['XMODIFIERS']}",
-            "--env", f"QT_IM_MODULE={env['QT_IM_MODULE']}",
-            "--env", f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-            f"--volume=/run/user/{uid}/bus:/run/user/{uid}/bus"
-        ])
-    if app_setting.get("volume"):
-        app_vol = os.path.join(vol_path, app_setting["app_name"])
+    command = ["docker", "run"]
+    command.extend(["--rm", "-t", "--net=bridge", "--shm-size=4096m"])
+    command.extend(['--name', app_design["app_name"]])
+    command.extend(["--env", f"DISPLAY=:{display}"])
+    command.append(
+        f"--volume=/tmp/.X11-unix/X{display}:/tmp/.X11-unix/X{display}")
+    image_command = 'groupadd -g 1000 user && '
+    if app_design.get("volume"):
+        app_vol = os.path.join(VOL_PATH, app_design["app_name"])
         if not Path(app_vol).is_dir():
             os.makedirs(app_vol)
-        options.append(f"--volume={app_vol}:/root")
-    if app_setting.get("docker_sock"):
-        app_bind_path = f"BIND_PATH={os.path.join(vol_path, app_setting['app_name'])}"
-        options.extend(
-            ["--env", app_bind_path])
-        options.append(
-            f"--volume=/run/user/{uid}/docker.sock:/var/run/docker.sock")
-    if app_setting.get("tmpfs"):
-        options.extend(["--tmpfs", "/dev/shm"])
-    if app_setting.get("gpu"):
-        options.append("--device=/dev/dri:/dev/dri")
-    if app_setting.get("kvm"):
-        options.append("--device=/dev/kvm:/dev/kvm")
-    if app_setting.get("options"):
-        options.extend(app_setting["options"])
-    return options
+        command.append(f"--volume={app_vol}:/home/user")
+        image_command += 'useradd -u 1000 -g user user && chown -R user:user /home/user; '
+    else:
+        image_command += 'useradd -m -u 1000 -g user user && chown -R user:user /home/user; '
+    if app_design.get("audio"):
+        if display == 0:
+            command.extend([
+                "--env", "PULSE_COOKIE=/tmp/pulse/cookie",
+                "--env", "PULSE_SERVER=unix:/tmp/pulse/native",
+                f"--volume=/run/user/{UID}/pulse/native:/tmp/pulse/native",
+                f"--volume={ENV['HOME']}/.config/pulse/cookie:/tmp/pulse/cookie_org:ro"
+            ])
+        else:
+            command.extend([
+                "--env", "PULSE_COOKIE=/tmp/pulse/cookie",
+                "--env", "PULSE_SERVER=unix:/tmp/pulse/native",
+                f"--volume=/run/user/{UID}/xpra/pulse-{display}/pulse/native:/tmp/pulse/native",
+                f"--volume={ENV['HOME']}/.config/pulse/cookie:/tmp/pulse/cookie_org:ro"
+            ])
+        image_command += 'cp /tmp/pulse/cookie_org /tmp/pulse/cookie; chmod 644 /tmp/pulse/cookie;'
+    if app_design.get("input_method"):
+        command.extend([
+            "--env", f"GTK_IM_MODULE={ENV['GTK_IM_MODULE']}",
+            "--env", f"XMODIFIERS={ENV['XMODIFIERS']}",
+            "--env", f"QT_IM_MODULE={ENV['QT_IM_MODULE']}",
+            "--env", f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{UID}/bus",
+            f"--volume=/run/user/{UID}/bus:/run/user/{UID}/bus"
+        ])
+    if app_design.get("docker_sock"):
+        app_bind_path = f"BIND_PATH={os.path.join(VOL_PATH, app_design['app_name'])}"
+        command.extend(["--env", app_bind_path])
+        command.append(
+            f"--volume=/run/user/{UID}/docker.sock:/var/run/docker.sock")
+        image_command += 'usermod -aG root,docker user;'
+    if app_design.get("tmpfs"):
+        command.extend(["--tmpfs", "/dev/shm"])
+    if app_design.get("gpu"):
+        command.append("--device=/dev/dri:/dev/dri")
+    if app_design.get("kvm"):
+        command.append("--device=/dev/kvm:/dev/kvm")
+    if app_design.get("privileged"):
+        command.append("--privileged")
+    if app_design.get("options"):
+        command.extend(app_design["options"])
+    image_command += f'su user -c "{app_design["command"]}"'
+    command.extend([app_design["image"], "bash", "-c", image_command])
+    return command
 
 
 def start(app_name):
     """start local app
 
-    start local app based on app definition
+    start local app based on app design
 
     Args:
-        app_name (String): app name to get app definition
+        app_name (String): app name to get app design
 
     Returns:
         None
 
     """
-    setting = read_definition()
-    if app_name not in setting:
-        print('App setting not found. Create app setting.')
+    design = read_design()
+    if app_name not in design:
+        print('App design not found. Create app design.')
         return
-    app_setting = setting[app_name]
+    app_design = design[app_name]
 
-    docker_command = ["docker", "run"]
-    docker_command.extend(['--name', app_name])
-    docker_command.extend(["--volume=/tmp/.X11-unix/X0:/tmp/.X11-unix/X0"])
-    docker_command.extend(["--env", "DISPLAY=:0"])
+    if 'SSH_CONNECTION' in ENV:
+        display = 101
+    else:
+        display = 0
+        exec_with_logging(
+            'Xserver_chmod',
+            ['bash', '-c', 'DISPLAY=:0; chmod 777 /tmp/.X11-unix/X0 && xhost +local:'],
+            'local')
+    command = docker_command_constructor(app_design, display)
 
-    image_command = [app_setting["image"]]
-    image_command.extend(app_setting["command"].split(" "))
-
-    command = []
-    command.extend(docker_command)
-    command.extend(docker_options(app_setting))
-    command.extend(image_command)
     exec_with_logging(app_name, command, 'local')
-
-
-def remote_start(app_name):
-    """start local app
-
-    start local app based on app definition
-
-    Args:
-        app_name (String): app name to get app definition
-
-    Returns:
-        None
-
-    """
-    setting = read_definition()
-    if app_name not in setting:
-        print('App setting not found. Create app setting.')
-        return
-    app_setting = setting[app_name]
-    docker_command = ['docker', 'run']
-    docker_command.extend(['--name', app_name])
-    docker_command.extend(['--volumes-from', 'xpra', '-e', 'DISPLAY=:80'])
-
-    image_command = [app_setting["image"]]
-    image_command.extend(app_setting["command"].split(" "))
-
-    command = []
-    command.extend(docker_command)
-    command.extend(docker_options(app_setting))
-    command.extend(image_command)
-    exec_with_logging(app_name, command, 'remote')
 
 
 def client():
@@ -269,9 +287,16 @@ def client():
         None
 
     """
+
+    # Wait for the server to start.
+    time.sleep(2)
+
+    port = 10001
+    display = 101
     command = ['x11docker', '--gpu', '-c', '--exe', 'xpra',
-               'attach', 'tcp://127.0.0.1:10000/80']
-    exec_with_logging('xpra', command, 'local')
+               'attach', f'tcp://127.0.0.1:{port}/{display}']
+
+    exec_with_logging('xpra_client', command, 'local')
 
 
 def server():
@@ -286,10 +311,41 @@ def server():
         None
 
     """
+    port = 10001
+    display = 101
+
+    command = ['xpra', 'start', f':{display}', f'--bind-tcp=127.0.0.1:{port}',
+               '--start=xhost +local:', '--no-daemon']
+
+    exec_with_logging('xpra_server', command, 'remote')
+
+
+def syncthing():
+    """launch syncthing
+
+    launch syncthing
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    """
+    if 'SSH_CONNECTION' in ENV:
+        hostname = 'remote'
+    else:
+        hostname = 'local'
     command = ['docker', 'run', '--rm', '-t']
-    command.extend(['--name', 'xpra', '-p', '127.0.0.1:10000:10000'])
-    command.extend(['--device=/dev/dri:/dev/dri', 'xpra', 'server'])
-    exec_with_logging('xpra', command, 'remote')
+    command.extend(['--name', 'syncthing'])
+    command.extend(
+        ['-p127.0.0.1:8384:8384', '-p22000:22000/tcp', '-p22000:22000/udp'])
+    command.extend([f'--volume={VOL_PATH}:/var/syncthing'])
+    command.extend([f'--hostname={hostname}'])
+    command.extend(['--env', 'PUID=0', '--env', 'PGUID=0'])
+    command.extend(['syncthing/syncthing'])
+
+    exec_with_logging('syncthing', command, 'local')
 
 
 def app_list():
@@ -304,8 +360,8 @@ def app_list():
         None
 
     """
-    setting = read_definition()
-    for app_name in setting.keys():
+    design = read_design()
+    for app_name in design.keys():
         print(app_name)
 
 
@@ -321,9 +377,9 @@ def generate_desktop_entry(app_name):
         None
 
     """
-    setting = read_definition()
-    if app_name not in setting:
-        print('App setting not found. Create app setting.')
+    design = read_design()
+    if app_name not in design:
+        print('App design not found. Create app design.')
         return
     icon_file = input('Icon File:')
     entry = (
@@ -331,25 +387,25 @@ def generate_desktop_entry(app_name):
         "Type=Application\n"
         f"Name={app_name}\n"
         "MimeType=application/vnd.ms-htmlhelp;\n"
-        f"Path={xsprashhome}\n"
+        f"Path={XSPRASHHOME}\n"
         f"Exec=bash -c \"python xsprash.py start {app_name}\"\n"
         "NoDisplay=false\n"
         "Terminal=false\n"
         "StartupNotify=true\n"
         "Categories=Development;\n"
-        f"Icon={os.path.join(icon_path, icon_file)}\n"
+        f"Icon={os.path.join(ICON_PATH, icon_file)}\n"
     )
-    entry_file = os.path.join(desktopfile_dir, f'{app_name}.desktop')
+    entry_file = os.path.join(DESKTOPFILE_DIR, f'{app_name}.desktop')
     with open(entry_file, 'w', encoding='utf-8') as entryfile:
         entryfile.write(entry)
-    command = ['update-desktop-database', desktopfile_dir]
+    command = ['update-desktop-database', DESKTOPFILE_DIR]
     subprocess.call(command)
 
 
 def generate_aliases():
-    """print settings for aliases
+    """print designs for aliases
 
-    print settings for aliases
+    print designs for aliases
 
     Args:
         None
@@ -358,12 +414,54 @@ def generate_aliases():
         None
 
     """
-    setting = read_definition()
-    for app_name, conf in setting.items():
+    design = read_design()
+    for app_name, conf in design.items():
         if conf['image'].startswith('ubuntubase'):
             continue
         print(
-            f"alias {app_name}='python {os.path.join(xsprashhome, 'xsprash.py')} start {app_name}'")
+            f"alias {app_name}='python {os.path.join(XSPRASHHOME, 'xsprash.py')} start {app_name}'")
+
+
+def chown(app_name):
+    """change volume owner to host user
+
+    change volume owner to host user
+
+    Args:
+        app_name (String): app name to change ownership
+
+    Returns:
+        None
+
+    """
+
+
+def build(app_name):
+    """build app image
+
+    build app image
+
+    Args:
+        app_name (String): app name to build
+
+    Returns:
+        None
+
+    """
+
+
+def build_all():
+    """build all app image
+
+    build all app image
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    """
 
 
 def main():
@@ -378,23 +476,29 @@ def main():
         None
 
     """
+    init()
     if args.command == 'start':
-        if 'SSH_CONNECTION' in env:
-            remote_start(args.app_name)
-        else:
-            start(args.app_name)
+        start(args.target)
     elif args.command == 'create':
         create()
     elif args.command == 'client':
         client()
     elif args.command == 'server':
         server()
+    elif args.command == 'sync':
+        syncthing()
     elif args.command == 'list':
         app_list()
     elif args.command == 'aliases':
         generate_aliases()
     elif args.command == 'desktop-entry':
-        generate_desktop_entry(args.app_name)
+        generate_desktop_entry(args.target)
+    elif args.command == 'chown':
+        chown(args.target)
+    elif args.command == 'build':
+        build(args.target)
+    elif args.command == 'build-all':
+        build_all()
 
 
 if __name__ == "__main__":
