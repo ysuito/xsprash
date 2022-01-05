@@ -38,8 +38,9 @@ curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker
 ### System Settings
 Change the configuration so that X Server can be started from X11docker.
 
-```bash:bash
-echo "allowed_users=anybody" | sudo tee -a /etc/X11/Xwrapper.config
+```config:/etc/X11/Xwrapper.config
+...
+allowed_users=anybody
 ```
 
 Change the configuration so that you can connect to DBUS from within the container.
@@ -71,7 +72,7 @@ There are definitions of other applications under `src/`, but only the one above
 
 Define the application to configure the resources to be used by the application.
 ```bash:bash
-$ python xsprash.py create
+$ python3 xsprash.py create
 App Name(String):vscode
 Image(String):vscode
 Command(String):code --verbose
@@ -87,15 +88,15 @@ Docker Options(String):
 
 If you want to register it as a gnome desktop app, put your favorite icon file in `icon/` and execute the following.
 ```bash:bash
-$ python xsprash.py desktop-entry vscode
+$ python3 xsprash.py desktop-entry vscode
 Icon File:vscode.svg
 ```
 Now, you can use it as a gnome desktop application.
 
 If you want to start it from the command line, run the following.
 ```bash:bash
-$ python xsprash.py aliases
-alias vscode='python /home/$USER/xsprash/xsprash.py start vscode'
+$ python3 xsprash.py aliases
+alias vscode='python3 /home/$USER/xsprash/xsprash.py start vscode'
 ```
 
 The alias setting will be output, so add it to the alias configuration file of your shell.
@@ -127,9 +128,9 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  python ~/xsprash/xsprash.py server & SHELL
+RemoteCommand  python3 ~/xsprash/xsprash.py server & SHELL
 PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client &
+LocalCommand   python3 ~/xsprash/xsprash.py client &
 LocalForward   10001 127.0.0.1:10001
 ```
 
@@ -166,9 +167,9 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  python ~/xsprash/xsprash.py server & python ~/xsprash/xsprash.py sync & SHELL
+RemoteCommand  python3 ~/xsprash/xsprash.py server & python3 ~/xsprash/xsprash.py sync & SHELL
 PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client & python ~/xsprash/xsprash.py sync &
+LocalCommand   python3 ~/xsprash/xsprash.py client & python3 ~/xsprash/xsprash.py sync &
 LocalForward   10001 127.0.0.1:10001
 LocalForward   18384 127.0.0.1:8384
 ```
