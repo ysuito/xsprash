@@ -35,8 +35,9 @@ curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker
 ### システム設定
 X ServerをX11dockerから起動できるように設定変更。
 
-```bash:bash
-echo "allowed_users=anybody" | sudo tee -a /etc/X11/Xwrapper.config
+```config:/etc/X11/Xwrapper.config
+...
+allowed_users=anybody
 ```
 
 コンテナ内からDBUSに接続できるように設定変更。
@@ -68,7 +69,7 @@ docker build -t vscode src/vscode/
 
 アプリが利用するリソースを設定するためのアプリケーション定義をします。
 ```bash:bash
-$ python xsprash.py create
+$ python3 xsprash.py create
 App Name(String):vscode
 Image(String):vscode
 Command(String):code --verbose
@@ -84,15 +85,15 @@ Docker Options(String):
 
 gnomeデスクトップアプリとして登録したい場合は、`icon/`に好きなiconファイルを設置し、下記を実行。
 ```bash:bash
-$ python xsprash.py desktop-entry vscode
+$ python3 xsprash.py desktop-entry vscode
 Icon File:vscode.svg
 ```
 これで、gnomeデスクトップアプリとして利用できるようになります。
 
 コマンドラインから起動したい場合は、下記を実行。
 ```bash:bash
-$ python xsprash.py aliases
-alias vscode='python /home/$USER/xsprash/xsprash.py start vscode'
+$ python3 xsprash.py aliases
+alias vscode='python3 /home/$USER/xsprash/xsprash.py start vscode'
 ```
 
 alias設定が出力されるので、お使いのシェルのalias設定ファイルに追記してください。
@@ -124,9 +125,9 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  python ~/xsprash/xsprash.py server & SHELL
+RemoteCommand  python3 ~/xsprash/xsprash.py server & SHELL
 PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client &
+LocalCommand   python3 ~/xsprash/xsprash.py client &
 LocalForward   10001 127.0.0.1:10001
 ```
 
@@ -162,9 +163,9 @@ Port           22
 User           USERNAME
 IdentityFile   ~/.ssh/KEY
 RequestTTY     force
-RemoteCommand  python ~/xsprash/xsprash.py server & python ~/xsprash/xsprash.py sync & SHELL
+RemoteCommand  python3 ~/xsprash/xsprash.py server & python3 ~/xsprash/xsprash.py sync & SHELL
 PermitLocalCommand yes
-LocalCommand   python ~/xsprash/xsprash.py client & python ~/xsprash/xsprash.py sync &
+LocalCommand   python3 ~/xsprash/xsprash.py client & python3 ~/xsprash/xsprash.py sync &
 LocalForward   10001 127.0.0.1:10001
 LocalForward   18384 127.0.0.1:8384
 ```

@@ -7,7 +7,9 @@
 Todo:
     * launch each X Server per app
     * tighten auth
-    * attach
+    * chown
+    * build
+    * build-all
 """
 
 import argparse
@@ -216,10 +218,19 @@ def docker_command_constructor(app_design, display):
             ])
         image_command += 'cp /tmp/pulse/cookie_org /tmp/pulse/cookie; chmod 644 /tmp/pulse/cookie;'
     if app_design.get("input_method"):
+        if 'GTK_IM_MODULE' in ENV:
+            command.extend([
+                "--env", f"GTK_IM_MODULE={ENV['GTK_IM_MODULE']}"
+            ])
+        if 'XMODIFIERS' in ENV:
+            command.extend([
+                "--env", f"XMODIFIERS={ENV['XMODIFIERS']}"
+            ])
+        if 'QT_IM_MODULE' in ENV:
+            command.extend([
+                "--env", f"QT_IM_MODULE={ENV['QT_IM_MODULE']}"
+            ])
         command.extend([
-            "--env", f"GTK_IM_MODULE={ENV['GTK_IM_MODULE']}",
-            "--env", f"XMODIFIERS={ENV['XMODIFIERS']}",
-            "--env", f"QT_IM_MODULE={ENV['QT_IM_MODULE']}",
             "--env", f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{UID}/bus",
             f"--volume=/run/user/{UID}/bus:/run/user/{UID}/bus"
         ])
@@ -315,7 +326,7 @@ def server():
     display = 101
 
     command = ['xpra', 'start', f':{display}', f'--bind-tcp=127.0.0.1:{port}',
-               '--start=xhost +local:', '--no-daemon']
+               '--start=xhost +local:']
 
     exec_with_logging('xpra_server', command, 'remote')
 
@@ -388,7 +399,7 @@ def generate_desktop_entry(app_name):
         f"Name={app_name}\n"
         "MimeType=application/vnd.ms-htmlhelp;\n"
         f"Path={XSPRASHHOME}\n"
-        f"Exec=bash -c \"python xsprash.py start {app_name}\"\n"
+        f"Exec=bash -c \"python3 xsprash.py start {app_name}\"\n"
         "NoDisplay=false\n"
         "Terminal=false\n"
         "StartupNotify=true\n"
@@ -419,7 +430,7 @@ def generate_aliases():
         if conf['image'].startswith('ubuntubase'):
             continue
         print(
-            f"alias {app_name}='python {os.path.join(XSPRASHHOME, 'xsprash.py')} start {app_name}'")
+            f"alias {app_name}='python3 {os.path.join(XSPRASHHOME, 'xsprash.py')} start {app_name}'")
 
 
 def chown(app_name):
