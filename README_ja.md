@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker
 
 ### システム設定
 X ServerをX11dockerから起動できるように設定変更。
-
+`/etc/X11/Xwrapper.config`を編集
 ```config:/etc/X11/Xwrapper.config
 ...
 allowed_users=anybody

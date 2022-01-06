@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker
 
 ### System Settings
 Change the configuration so that X Server can be started from X11docker.
-
+Edit `/etc/X11/Xwrapper.config`
 ```config:/etc/X11/Xwrapper.config
 ...
 allowed_users=anybody
