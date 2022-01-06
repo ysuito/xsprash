@@ -10,6 +10,7 @@ Todo:
     * chown
     * build
     * build-all
+    * xfce4-teminal dockerfile
 """
 
 import argparse

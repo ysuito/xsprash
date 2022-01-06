@@ -21,10 +21,10 @@ sshで接続して、アプリを起動するだけで、別のPCやサーバー
 別のPCに非常に簡単に引っ越せます。
 
 ## Installation
-### Docker Rootless
+### Docker Rootless(Client and Server)
 [Run the Docker daemon as a non-root user](https://docs.docker.com/engine/security/rootless/) に従って docker rootless をインストール
 
-### x11docker
+### x11docker(Only Client)
 x11dockerのための依存パッケージを[recommended-base](https://github.com/mviereck/x11docker/wiki/Dependencies#recommended-base)に従ってインストール
 
 x11docker本体のインストール
@@ -32,7 +32,7 @@ x11docker本体のインストール
 curl -fsSL https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker | sudo bash -s -- --update
 ```
 
-### システム設定
+### システム設定(Only Client)
 X ServerをX11dockerから起動できるように設定変更。
 `/etc/X11/Xwrapper.config`を編集
 ```config:/etc/X11/Xwrapper.config
@@ -52,7 +52,7 @@ allowed_users=anybody
 </busconfig>
 ```
 
-### イメージビルド
+### イメージビルド(Client and Server)
 
 vscode イメージをビルドする
 
@@ -65,7 +65,7 @@ docker build -t vscode src/vscode/
 日本語環境の場合は、`ubuntubase`を`ubuntubase_ja`に変更してください。
 `src/`配下には他のアプリケーションの定義もありますが、サンプルのため上記のもののみをビルドしています。
 
-### アプリ定義
+### アプリ定義(Client and Server)
 
 アプリが利用するリソースを設定するためのアプリケーション定義をします。
 ```bash:bash
@@ -112,7 +112,7 @@ vscode Remote Containerで開発する場合は、`devcontainer.json`に下記�
 	"workspaceFolder": "/workspace"
 ```
 
-## リモートでアプリ実行
+## リモートでアプリ実行(Client)
 ssh configに設定を加えるだけで、リモートにあるPCでアプリを実行できるようになります。
 まず、リモート側のPCでも上記内容のインストールを実行してください。
 
